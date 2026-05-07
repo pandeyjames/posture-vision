@@ -137,6 +137,11 @@ const HABIT_KEY = "postureVisionHabits.v1";
 const CONSENT_KEY = "postureVisionConsent.v1";
 const PERSISTED_KEYS = [STORAGE_KEY, STATS_KEY, HISTORY_KEY, PROFILE_KEY, HABIT_KEY, CONSENT_KEY];
 let hydrationComplete = false;
+let platformInfo = {
+  mode: "unknown",
+  label: "Unknown",
+  capabilities: {}
+};
 
 const LANDMARKS = {
   nose: 0,
@@ -1535,6 +1540,29 @@ async function updateStartupStatus() {
   }
 }
 
+async function updatePlatformInfo() {
+  try {
+    const response = await fetch("/platform");
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    platformInfo = await response.json();
+  } catch (error) {
+    console.warn("Could not load platform capabilities", error);
+    platformInfo = { mode: "unknown", label: "Unknown", capabilities: {} };
+  }
+
+  const capabilities = platformInfo.capabilities || {};
+  minimizeTrayBtn.disabled = !capabilities.minimizeToTray;
+  minimizeTrayBtn.title = capabilities.minimizeToTray
+    ? `Minimize using ${platformInfo.label || "this platform"} integration`
+    : "Minimize to tray is not supported on this platform/session.";
+
+  installStartupBtn.disabled = !capabilities.startupIntegration;
+  removeStartupBtn.disabled = !capabilities.startupIntegration;
+  if (!capabilities.startupIntegration) {
+    startupText.textContent = "Unsupported";
+  }
+}
+
 async function updateVersion() {
   try {
     const response = await fetch("/version");
@@ -1647,6 +1675,11 @@ async function exportDiagnostics() {
 }
 
 async function setStartupInstalled(installed) {
+  if (!platformInfo.capabilities?.startupIntegration) {
+    setStatus("Startup integration is not supported in this platform/session.", "warn");
+    return;
+  }
+
   try {
     const response = await fetch(installed ? "/startup/install" : "/startup/remove", { method: "POST" });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -1654,22 +1687,27 @@ async function setStartupInstalled(installed) {
     setStatus(installed ? "Startup shortcut installed." : "Startup shortcut removed.", "good");
   } catch (error) {
     console.error(error);
-    setStatus("Could not update Windows startup. Use the PowerShell scripts if needed.", "bad");
+    setStatus("Could not update startup integration. Use the platform install script if needed.", "bad");
   }
 }
 
 async function minimizeToTray() {
+  if (!platformInfo.capabilities?.minimizeToTray) {
+    setStatus("Minimize to tray is not supported in this platform/session.", "warn");
+    return;
+  }
+
   try {
-    setStatus("Minimizing to tray. Reopen from the Posture Vision tray icon.", "neutral");
+    setStatus(`Minimizing with ${platformInfo.label || "platform"} integration.`, "neutral");
     const response = await fetch("/window/minimize", { method: "POST" });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const payload = await response.json();
     if (!payload.minimized) {
-      setStatus("Tray helper started. Use the window minimize button if this window did not minimize.", "warn");
+      setStatus("Could not find a supported app window to minimize. Use the launcher for this platform/session.", "warn");
     }
   } catch (error) {
     console.error(error);
-    setStatus("Could not minimize to tray. Start the tray helper from the Start Menu or README command.", "bad");
+    setStatus("Could not minimize through the current platform integration.", "bad");
   }
 }
 
@@ -1910,6 +1948,7 @@ async function initializeApp() {
   updatePauseButton();
   updateMuteButton();
   updateCompactButton();
+  await updatePlatformInfo();
   updateStartupStatus();
   updateVersion();
   updateStorageStatus();

@@ -155,6 +155,31 @@ def native_notify(title, message):
     safe_title = str(title or APP_NAME)[:64]
     safe_message = str(message or "")[:255]
 
+    if is_wsl():
+        powershell = shutil.which("powershell.exe")
+        if not powershell:
+            return False
+
+        command = f"""
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+$icon = New-Object System.Windows.Forms.NotifyIcon
+$icon.Text = {json.dumps(APP_NAME)}
+$icon.Icon = [System.Drawing.SystemIcons]::Information
+$icon.Visible = $true
+$icon.ShowBalloonTip(4000, {json.dumps(safe_title)}, {json.dumps(safe_message)}, [System.Windows.Forms.ToolTipIcon]::Warning)
+Start-Sleep -Seconds 5
+$icon.Visible = $false
+$icon.Dispose()
+"""
+        subprocess.Popen(
+            [powershell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command],
+            cwd=str(ROOT),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        return True
+
     if sys.platform.startswith("linux"):
         notify_send = shutil.which("notify-send")
         if not notify_send:
@@ -228,6 +253,100 @@ def lock_workstation():
     raise OSError("Computer lock is only implemented for Windows and Linux")
 
 
+def is_wsl():
+    if not sys.platform.startswith("linux"):
+        return False
+
+    try:
+        release = Path("/proc/sys/kernel/osrelease").read_text(encoding="utf-8", errors="ignore").lower()
+        return "microsoft" in release or "wsl" in release
+    except OSError:
+        return bool(os.environ.get("WSL_DISTRO_NAME"))
+
+
+def set_wsl_windows_browser_visibility(action):
+    powershell = shutil.which("powershell.exe")
+    if not powershell:
+        return False
+
+    show_command = "6" if action == "hide" else "9"
+    command = f"""
+$showCommand = {show_command}
+Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+using System.Text;
+
+public static class PostureWindowNative {{
+    public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    public static extern bool EnumWindows(EnumWindowsProc enumProc, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    public static extern bool IsWindowVisible(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    public static extern int GetWindowText(IntPtr hWnd, StringBuilder text, int count);
+
+    [DllImport("user32.dll")]
+    public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+
+    [DllImport("user32.dll")]
+    public static extern bool ShowWindowAsync(IntPtr hWnd, int command);
+
+    [DllImport("user32.dll")]
+    public static extern bool SetForegroundWindow(IntPtr hWnd);
+}}
+"@
+
+$targets = Get-CimInstance Win32_Process |
+    Where-Object {{
+        $_.Name -match '^(msedge|chrome|msedgewebview2)\\.exe$' -and
+        ($_.CommandLine -like '*127.0.0.1:8765*' -or $_.CommandLine -like '*posture-vision*browser-profile*')
+    }} |
+    ForEach-Object {{ [uint32]$_.ProcessId }}
+
+$count = 0
+$callback = [PostureWindowNative+EnumWindowsProc] {{
+    param([IntPtr]$hwnd, [IntPtr]$lparam)
+    $processId = [uint32]0
+    [PostureWindowNative]::GetWindowThreadProcessId($hwnd, [ref]$processId) | Out-Null
+    if ($targets -contains $processId) {{
+        $titleBuilder = New-Object System.Text.StringBuilder 512
+        [PostureWindowNative]::GetWindowText($hwnd, $titleBuilder, $titleBuilder.Capacity) | Out-Null
+        $title = $titleBuilder.ToString()
+        if ($title -or [PostureWindowNative]::IsWindowVisible($hwnd)) {{
+            [PostureWindowNative]::ShowWindowAsync($hwnd, $showCommand) | Out-Null
+            if ($showCommand -eq 9) {{
+                [PostureWindowNative]::SetForegroundWindow($hwnd) | Out-Null
+            }}
+            $script:count += 1
+        }}
+    }}
+    return $true
+}}
+
+[PostureWindowNative]::EnumWindows($callback, [IntPtr]::Zero) | Out-Null
+Write-Output $count
+"""
+
+    result = subprocess.run(
+        [powershell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command],
+        cwd=str(ROOT),
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        return False
+
+    try:
+        return int((result.stdout or "0").strip().splitlines()[-1]) > 0
+    except (ValueError, IndexError):
+        return False
+
+
 def queue_notification(title, body, announce=False):
     CONTROL_STATE["notificationSeq"] += 1
     item = {
@@ -242,6 +361,42 @@ def queue_notification(title, body, announce=False):
 
 
 def start_tray_helper():
+    if is_wsl():
+        powershell = shutil.which("powershell.exe")
+        wslpath = shutil.which("wslpath")
+        if not powershell or not wslpath:
+            return False
+
+        script = ROOT / "tray-posture-vision.ps1"
+        if not script.exists():
+            raise FileNotFoundError(f"Tray helper not found: {script}")
+
+        converted = subprocess.run(
+            [wslpath, "-w", str(script)],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        if converted.returncode != 0 or not converted.stdout.strip():
+            return False
+
+        subprocess.Popen(
+            [
+                powershell,
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-WindowStyle",
+                "Hidden",
+                "-File",
+                converted.stdout.strip(),
+            ],
+            cwd=str(ROOT),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        return True
+
     if sys.platform != "win32":
         return False
 
@@ -343,6 +498,8 @@ def app_window_visible_on_screen():
 
 def set_app_window_visibility(action):
     if sys.platform != "win32":
+        if is_wsl():
+            return set_wsl_windows_browser_visibility(action)
         return False
 
     user32 = ctypes.windll.user32
@@ -542,11 +699,12 @@ def diagnostics_payload():
 
 def requirements_payload():
     python_version = sys.version_info
+    wsl = is_wsl()
     requirements = [
         {
             "name": "Supported desktop OS",
             "ok": sys.platform == "win32" or sys.platform.startswith("linux"),
-            "detail": "Windows has full tray support. Linux supports local server launchers, desktop/autostart files, notify-send notifications, and common lock commands.",
+            "detail": "Windows has full tray support. WSL uses Windows browser/window/notification integration when available. Linux desktop supports shell launchers, desktop/autostart files, notify-send notifications, and common lock commands.",
         },
         {
             "name": "Python 3.10 or newer",
@@ -576,13 +734,50 @@ def requirements_payload():
         {
             "name": "PowerShell script execution",
             "ok": True,
-            "detail": "Windows launchers use PowerShell. Linux launchers use Bash shell scripts.",
+            "detail": "Windows launchers use PowerShell. WSL uses PowerShell for Windows integration. Linux desktop launchers use Bash shell scripts.",
         },
     ]
 
     return {
         "ok": all(item["ok"] is not False for item in requirements),
         "requirements": requirements,
+    }
+
+
+def platform_payload():
+    wsl = is_wsl()
+    windows_bridge = bool(wsl and shutil.which("powershell.exe"))
+    linux_desktop = bool(sys.platform.startswith("linux") and not wsl)
+    windows = sys.platform == "win32"
+
+    if windows:
+        mode = "windows"
+        label = "Windows"
+    elif wsl:
+        mode = "wsl"
+        label = "WSL hybrid"
+    elif linux_desktop:
+        mode = "linux"
+        label = "Linux desktop"
+    else:
+        mode = sys.platform
+        label = sys.platform
+
+    return {
+        "platform": sys.platform,
+        "mode": mode,
+        "label": label,
+        "isWindows": windows,
+        "isWsl": wsl,
+        "isLinuxDesktop": linux_desktop,
+        "capabilities": {
+            "trayHelper": windows or windows_bridge,
+            "minimizeToTray": windows or windows_bridge,
+            "nativeNotifications": windows or linux_desktop or windows_bridge,
+            "startupIntegration": windows or linux_desktop,
+            "autoLock": windows or sys.platform.startswith("linux"),
+            "spokenAnnouncements": windows or windows_bridge,
+        },
     }
 
 
@@ -804,6 +999,10 @@ class Handler(SimpleHTTPRequestHandler):
 
         if self.path == "/requirements":
             json_response(self, requirements_payload())
+            return
+
+        if self.path == "/platform":
+            json_response(self, platform_payload())
             return
 
         super().do_GET()
