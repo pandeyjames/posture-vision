@@ -30,6 +30,8 @@ For normal use, double-click:
 Install Posture Vision.cmd
 ```
 
+Do not open `index.html` directly from the folder. The app must run through the local server because browsers block module scripts, camera model loading, and local app APIs on `file://` pages.
+
 Install Posture Vision for the current Windows user and create Desktop/Start Menu shortcuts:
 
 ```powershell
