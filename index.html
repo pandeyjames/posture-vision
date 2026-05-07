@@ -1,0 +1,467 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Posture Vision</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="shell">
+      <section class="monitor">
+        <div class="camera-wrap">
+          <video id="video" playsinline muted></video>
+          <canvas id="overlay"></canvas>
+          <div id="cameraState" class="camera-state">Camera is off</div>
+        </div>
+        <aside class="panel">
+          <div>
+            <p class="eyebrow">Posture Vision</p>
+            <h1>Forward lean monitor</h1>
+          </div>
+
+          <div id="statusCard" class="status-card neutral">
+            <span id="statusText">Start camera, sit upright, then calibrate.</span>
+          </div>
+
+          <div class="tabs" role="tablist" aria-label="Posture Vision sections">
+            <button class="tab-button active" type="button" data-tab="monitorTab">Monitor</button>
+            <button class="tab-button" type="button" data-tab="automationTab">Automation</button>
+            <button class="tab-button" type="button" data-tab="settingsTab">Settings</button>
+            <button class="tab-button" type="button" data-tab="statisticsTab">Statistics</button>
+            <button class="tab-button" type="button" data-tab="habitsTab">Habits</button>
+            <button class="tab-button" type="button" data-tab="aboutTab">About</button>
+          </div>
+
+          <section id="monitorTab" class="tab-panel active">
+            <div class="meter">
+              <div class="meter-label">
+                <span>Lean score</span>
+                <strong id="scoreText">0%</strong>
+              </div>
+              <div class="meter-track">
+                <div id="scoreBar" class="meter-bar"></div>
+              </div>
+            </div>
+
+            <div class="controls">
+              <button id="startBtn" type="button">Start camera</button>
+              <button id="pauseBtn" type="button" class="secondary" disabled>Pause</button>
+              <button id="calibrateBtn" type="button" disabled>Calibrate upright</button>
+              <button id="resetCalibrationBtn" type="button" class="secondary" disabled>Reset calibration</button>
+            </div>
+
+            <div id="calibrationCard" class="calibration-card idle">
+              <div class="calibration-head">
+                <span>Calibration</span>
+                <strong id="calibrationText">Not started</strong>
+              </div>
+              <div class="calibration-track">
+                <div id="calibrationBar" class="calibration-bar"></div>
+              </div>
+              <p id="calibrationHelp">Start the camera, sit upright, and keep your head and shoulders visible.</p>
+            </div>
+
+            <label class="field">
+              <span>Strictness preset</span>
+              <select id="presetSelect">
+                <option value="custom">Custom</option>
+                <option value="relaxed">Relaxed</option>
+                <option value="normal" selected>Normal</option>
+                <option value="strict">Strict</option>
+              </select>
+            </label>
+
+            <label class="field">
+              <span>Lean score threshold <strong id="leanThresholdValue">50%</strong></span>
+              <input id="sensitivity" type="range" min="0" max="100" value="50">
+            </label>
+
+            <label class="field">
+              <span>Exact lean threshold</span>
+              <input id="leanThresholdNumber" type="number" min="0" max="100" step="1" value="50">
+            </label>
+            <p class="helper-text">Alerts trigger when the lean score reaches this percentage. Lower values are stricter.</p>
+
+            <label class="field">
+              <span>Reminder delay</span>
+              <select id="delay">
+                <option value="1500">1.5 seconds</option>
+                <option value="3000" selected>3 seconds</option>
+                <option value="5000">5 seconds</option>
+                <option value="10000">10 seconds</option>
+              </select>
+            </label>
+
+            <div class="readout">
+              <div>
+                <span>Pose</span>
+                <strong id="poseText">Waiting</strong>
+              </div>
+              <div>
+                <span>Alerts</span>
+                <strong id="alertModeText">Voice on</strong>
+              </div>
+              <div>
+                <span>Camera</span>
+                <strong id="healthText">Idle</strong>
+              </div>
+            </div>
+          </section>
+
+          <section id="automationTab" class="tab-panel">
+            <div class="controls">
+              <button id="muteBtn" type="button" class="secondary">Meeting mode off</button>
+              <button id="compactBtn" type="button" class="secondary">Compact view</button>
+              <button id="minimizeTrayBtn" type="button" class="secondary">Minimize to tray</button>
+            </div>
+
+            <label class="field">
+              <span>Snooze alerts</span>
+              <select id="snoozeSelect">
+                <option value="0" selected>Off</option>
+                <option value="300000">5 minutes</option>
+                <option value="900000">15 minutes</option>
+                <option value="1800000">30 minutes</option>
+              </select>
+            </label>
+
+            <label class="field">
+              <span>Spoken announcements</span>
+              <select id="announceNotifications">
+                <option value="on" selected>On</option>
+                <option value="off">Off</option>
+              </select>
+            </label>
+
+            <button id="testAnnouncementBtn" type="button" class="secondary">Test announcement</button>
+
+            <label class="field">
+              <span>Auto-lock when absent</span>
+              <select id="autoLockDelay">
+                <option value="0" selected>Off</option>
+                <option value="5000">After 5 seconds</option>
+                <option value="10000">After 10 seconds</option>
+              </select>
+            </label>
+
+            <label class="field">
+              <span>Break reminder</span>
+              <select id="breakInterval">
+                <option value="0" selected>Off</option>
+                <option value="1800000">Every 30 minutes</option>
+                <option value="2700000">Every 45 minutes</option>
+                <option value="3600000">Every 60 minutes</option>
+              </select>
+            </label>
+
+            <label class="field">
+              <span>Quiet hours</span>
+              <select id="quietHoursEnabled">
+                <option value="off" selected>Off</option>
+                <option value="on">On</option>
+              </select>
+            </label>
+
+            <div class="split-fields">
+              <label class="field">
+                <span>Quiet start</span>
+                <input id="quietStart" type="time" value="18:00">
+              </label>
+              <label class="field">
+                <span>Quiet end</span>
+                <input id="quietEnd" type="time" value="09:00">
+              </label>
+            </div>
+          </section>
+
+          <section id="settingsTab" class="tab-panel">
+            <label class="field">
+              <span>Calibration profile</span>
+              <select id="profileSelect">
+                <option value="default">Default</option>
+              </select>
+            </label>
+
+            <div class="controls two">
+              <button id="saveProfileBtn" type="button" class="secondary">Save profile</button>
+              <button id="deleteProfileBtn" type="button" class="secondary">Delete profile</button>
+            </div>
+
+            <label class="field">
+              <span>Camera mode</span>
+              <select id="cameraMode">
+                <option value="continuous" selected>Continuous monitoring</option>
+                <option value="periodic">Periodic privacy checks</option>
+              </select>
+            </label>
+
+            <label class="field">
+              <span>Start camera when app opens</span>
+              <select id="autoStartCamera">
+                <option value="on" selected>On</option>
+                <option value="off">Off</option>
+              </select>
+            </label>
+
+            <label class="field">
+              <span>Camera</span>
+              <select id="cameraSelect">
+                <option value="">Default camera</option>
+              </select>
+            </label>
+
+            <label class="field">
+              <span>Privacy check interval</span>
+              <select id="checkInterval">
+                <option value="30000">30 seconds</option>
+                <option value="60000" selected>1 minute</option>
+                <option value="120000">2 minutes</option>
+                <option value="300000">5 minutes</option>
+              </select>
+            </label>
+
+            <label class="field">
+              <span>Too-close warning</span>
+              <select id="distanceWarning">
+                <option value="off" selected>Off</option>
+                <option value="normal">Normal</option>
+                <option value="strict">Strict</option>
+              </select>
+            </label>
+
+            <div class="controls two">
+              <button id="installStartupBtn" type="button" class="secondary">Start with Windows</button>
+              <button id="removeStartupBtn" type="button" class="secondary">Remove startup</button>
+            </div>
+            <div class="readout">
+              <div>
+                <span>Startup</span>
+                <strong id="startupText">Checking</strong>
+              </div>
+              <div>
+                <span>Version</span>
+                <strong id="versionText">Checking</strong>
+              </div>
+              <div>
+                <span>Storage</span>
+                <strong id="storageText">Checking</strong>
+              </div>
+            </div>
+            <div class="controls two">
+              <button id="diagnosticsBtn" type="button" class="secondary">Export diagnostics</button>
+              <button id="privacyLinkBtn" type="button" class="secondary">Privacy policy</button>
+            </div>
+            <div class="controls two">
+              <button id="backupDataBtn" type="button" class="secondary">Back up database</button>
+              <button id="exportDataBtn" type="button" class="secondary">Export local data</button>
+            </div>
+          </section>
+
+          <section id="statisticsTab" class="tab-panel summary">
+            <div class="summary-head">
+              <span>Statistics</span>
+              <div class="inline-actions">
+                <button id="exportStatsBtn" type="button" class="link-button">Export</button>
+                <button id="resetStatsBtn" type="button" class="link-button">Reset</button>
+              </div>
+            </div>
+            <div class="summary-grid">
+              <div>
+                <span>Upright</span>
+                <strong id="uprightTimeText">0m</strong>
+              </div>
+              <div>
+                <span>Leaning</span>
+                <strong id="leaningTimeText">0m</strong>
+              </div>
+              <div>
+                <span>Reminders</span>
+                <strong id="reminderCountText">0</strong>
+              </div>
+              <div>
+                <span>Breaks</span>
+                <strong id="breakCountText">0</strong>
+              </div>
+              <div>
+                <span>Absences</span>
+                <strong id="absenceCountText">0</strong>
+              </div>
+              <div>
+                <span>Worst</span>
+                <strong id="worstScoreText">0%</strong>
+              </div>
+            </div>
+            <div class="weekly">
+              <div class="summary-head">
+                <span>Last 7 days</span>
+              </div>
+              <div id="weeklyList" class="weekly-list"></div>
+            </div>
+          </section>
+
+          <section id="habitsTab" class="tab-panel summary">
+            <div class="summary-head">
+              <span>Habits</span>
+              <div class="inline-actions">
+                <button id="exportHabitsBtn" type="button" class="link-button">Export</button>
+                <button id="resetHabitsBtn" type="button" class="link-button">Reset</button>
+              </div>
+            </div>
+
+            <label class="field">
+              <span>Detailed habit tracking</span>
+              <select id="habitTracking">
+                <option value="off" selected>Off</option>
+                <option value="on">On</option>
+              </select>
+            </label>
+
+            <label class="field">
+              <span>Expression signals</span>
+              <select id="expressionTracking">
+                <option value="off" selected>Off</option>
+                <option value="on">On</option>
+              </select>
+            </label>
+            <p class="helper-text">Habit data stays in the local Posture Vision database. Expression signals describe visible patterns, not actual emotions.</p>
+
+            <div class="summary-grid">
+              <div>
+                <span>Left tilt</span>
+                <strong id="leftTiltText">0</strong>
+              </div>
+              <div>
+                <span>Right tilt</span>
+                <strong id="rightTiltText">0</strong>
+              </div>
+              <div>
+                <span>Hand/face</span>
+                <strong id="handFaceText">0</strong>
+              </div>
+              <div>
+                <span>Restless</span>
+                <strong id="restlessText">0</strong>
+              </div>
+              <div>
+                <span>Close screen</span>
+                <strong id="closeScreenText">0</strong>
+              </div>
+              <div>
+                <span>Focused/neutral</span>
+                <strong id="neutralFaceText">0</strong>
+              </div>
+            </div>
+
+            <div class="weekly">
+              <div class="summary-head">
+                <span>Insights</span>
+              </div>
+              <div id="habitInsights" class="insights-list"></div>
+            </div>
+          </section>
+
+          <section id="aboutTab" class="tab-panel">
+            <div class="about-block">
+              <p class="eyebrow">About</p>
+              <h2>Posture Vision</h2>
+              <p class="helper-text">Local seated posture monitoring for forward lean, breaks, absence checks, and optional habit insights.</p>
+            </div>
+
+            <div class="status-card warn disclaimer-card">
+              <strong>Privacy disclaimer</strong>
+              <p>Posture Vision does not record video, does not record audio, and does not save screenshots or webcam images. Webcam frames are processed locally for posture landmarks only.</p>
+            </div>
+
+            <div class="readout">
+              <div>
+                <span>Version</span>
+                <strong id="aboutVersionText">Checking</strong>
+              </div>
+              <div>
+                <span>Storage</span>
+                <strong id="aboutStorageText">Checking</strong>
+              </div>
+              <div>
+                <span>Processing</span>
+                <strong>Local</strong>
+              </div>
+            </div>
+
+            <div class="info-list">
+              <div>
+                <strong>Prerequisites</strong>
+                <span>Posture Vision needs Windows 10/11, Python 3.10 or newer, a modern browser, webcam permission, and internet access for the current MediaPipe model/runtime files.</span>
+              </div>
+              <div>
+                <strong>Background operation</strong>
+                <span>Use the Desktop shortcut or tray Open app command. It opens a standalone app window and keeps a Posture Vision tray icon available. Minimize to tray hides the window while monitoring continues.</span>
+              </div>
+              <div>
+                <strong>Saved locally</strong>
+                <span>Calibration, settings, consent, statistics, profiles, and optional habit logs are saved in the local SQLite database.</span>
+              </div>
+              <div>
+                <strong>Not medical advice</strong>
+                <span>This app is a posture reminder and productivity aid. It is not a medical, diagnostic, or ergonomic assessment tool.</span>
+              </div>
+              <div>
+                <strong>Model files</strong>
+                <span>The browser loads MediaPipe runtime/model files from external CDNs unless the app is packaged with bundled assets later.</span>
+              </div>
+            </div>
+
+            <div class="weekly">
+              <div class="summary-head">
+                <span>Prerequisite check</span>
+              </div>
+              <div id="requirementsList" class="requirements-list"></div>
+            </div>
+
+            <div class="controls two">
+              <button id="aboutPrivacyBtn" type="button" class="secondary">Privacy policy</button>
+              <button id="aboutDiagnosticsBtn" type="button" class="secondary">Export diagnostics</button>
+            </div>
+          </section>
+        </aside>
+      </section>
+    </main>
+
+    <div id="consentModal" class="modal-backdrop hidden">
+      <section class="modal">
+        <p class="eyebrow">Posture Vision Beta</p>
+        <h2>Local posture and habit monitoring</h2>
+        <div class="modal-body">
+          <p>Posture Vision uses your webcam to estimate seated posture. Processing runs locally in this browser.</p>
+          <p>The app does not record video, audio, screenshots, or webcam images. Calibration, statistics, and optional habit logs are stored locally on this computer.</p>
+          <p>Habit and expression-signal features are optional and describe visible patterns only. They do not determine actual emotions or health conditions.</p>
+        </div>
+        <label class="check-row">
+          <input id="consentCheck" type="checkbox">
+          <span>I understand and want to use Posture Vision on this computer.</span>
+        </label>
+        <div class="controls two">
+          <button id="acceptConsentBtn" type="button" disabled>Continue</button>
+          <button id="privacyBtn" type="button" class="secondary">Privacy</button>
+        </div>
+      </section>
+    </div>
+
+    <div id="privacyModal" class="modal-backdrop hidden">
+      <section class="modal document-modal" role="dialog" aria-modal="true" aria-labelledby="privacyModalTitle">
+        <div class="document-head">
+          <div>
+            <p class="eyebrow">Privacy</p>
+            <h2 id="privacyModalTitle">Privacy policy</h2>
+          </div>
+          <button id="closePrivacyBtn" type="button" class="icon-button" aria-label="Close privacy policy">x</button>
+        </div>
+        <div id="privacyContent" class="document-content">
+          <p>Loading privacy policy...</p>
+        </div>
+      </section>
+    </div>
+
+    <script type="module" src="app.js"></script>
+  </body>
+</html>

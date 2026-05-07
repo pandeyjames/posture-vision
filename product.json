@@ -1,0 +1,21 @@
+{
+  "name": "Posture Vision",
+  "version": "0.1.0-beta.1",
+  "channel": "beta",
+  "publisher": "Posture Vision",
+  "homepage": "http://127.0.0.1:8765",
+  "privacy": "local-first",
+  "disclaimer": "Posture Vision does not record video, audio, screenshots, or webcam images.",
+  "supportedPlatforms": ["Windows 10", "Windows 11"],
+  "features": [
+    "seated posture monitoring",
+    "break reminders",
+    "local statistics",
+    "optional habit tracking",
+    "optional expression signals",
+    "first-run user installer",
+    "Desktop and Start Menu shortcuts",
+    "tray helper",
+    "Windows startup integration"
+  ]
+}

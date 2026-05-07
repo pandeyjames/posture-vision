@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+
+# Local app data and user-specific browser state
+data/
+
+# Generated release packages
+dist/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
