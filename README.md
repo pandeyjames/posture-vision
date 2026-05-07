@@ -11,6 +11,14 @@ python serve.py
 
 Open `http://127.0.0.1:8765` in a browser, allow camera access, sit upright, and press **Calibrate upright**.
 
+Local-only is the default. To bind the server for WSL/LAN testing:
+
+```bash
+python3 serve.py --host 0.0.0.0 --port 8765
+```
+
+Then open `http://<server-ip>:8765` from another browser. Only use this on trusted networks.
+
 ## First-Time Install On Windows
 
 Prerequisites:

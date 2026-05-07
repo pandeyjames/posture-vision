@@ -1,5 +1,6 @@
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+import argparse
 import base64
 import ctypes
 import datetime as dt
@@ -28,6 +29,22 @@ CONTROL_STATE = {
     "notificationAckSeq": 0,
     "notifications": [],
 }
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Run the Posture Vision local server.")
+    parser.add_argument(
+        "--host",
+        default=os.environ.get("POSTURE_VISION_HOST", HOST),
+        help="Address to bind. Use 127.0.0.1 for local-only or 0.0.0.0 for LAN/WSL access.",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=int(os.environ.get("POSTURE_VISION_PORT", PORT)),
+        help="TCP port to bind.",
+    )
+    return parser.parse_args()
 
 
 def startup_shortcut_path():
@@ -793,10 +810,14 @@ class Handler(SimpleHTTPRequestHandler):
 
 
 if __name__ == "__main__":
+    args = parse_args()
     root = ROOT
     init_db()
-    server = ThreadingHTTPServer((HOST, PORT), Handler)
-    print(f"Posture Vision is running at http://{HOST}:{PORT}")
+    server = ThreadingHTTPServer((args.host, args.port), Handler)
+    display_host = "127.0.0.1" if args.host == "0.0.0.0" else args.host
+    print(f"Posture Vision is running at http://{display_host}:{args.port}")
+    if args.host == "0.0.0.0":
+        print(f"Network access is enabled on port {args.port}. Only use this on trusted networks.")
     print("Press Ctrl+C to stop.")
     try:
         os.chdir(root)
