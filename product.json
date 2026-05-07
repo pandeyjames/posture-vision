@@ -6,7 +6,7 @@
   "homepage": "http://127.0.0.1:8765",
   "privacy": "local-first",
   "disclaimer": "Posture Vision does not record video, audio, screenshots, or webcam images.",
-  "supportedPlatforms": ["Windows 10", "Windows 11"],
+  "supportedPlatforms": ["Windows 10", "Windows 11", "Linux desktop"],
   "features": [
     "seated posture monitoring",
     "break reminders",

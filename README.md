@@ -11,7 +11,7 @@ python serve.py
 
 Open `http://127.0.0.1:8765` in a browser, allow camera access, sit upright, and press **Calibrate upright**.
 
-## First-Time Install
+## First-Time Install On Windows
 
 Prerequisites:
 
@@ -58,6 +58,49 @@ Remove shortcuts and local saved data:
 ```powershell
 cd D:\Research\LLLM\posture-vision
 .\uninstall-posture-vision.ps1 -RemoveLocalData
+```
+
+## First-Time Install On Linux
+
+Prerequisites:
+
+- A Linux desktop session
+- Python 3.10 or newer, usually available as `python3`
+- Microsoft Edge, Google Chrome, Chromium, or `xdg-open`
+- A webcam that can see your head and shoulders while seated
+- Internet access for the current MediaPipe runtime/model files
+- Optional: `notify-send` for native Linux posture notifications
+
+Install Posture Vision for the current Linux user and create application shortcuts:
+
+```bash
+cd /path/to/PostureVision
+chmod +x *.sh
+./install-posture-vision.sh
+```
+
+Install it and also start the local server after desktop login:
+
+```bash
+./install-posture-vision.sh --startup
+```
+
+Run without installing shortcuts:
+
+```bash
+./launch-posture-vision.sh
+```
+
+Remove Linux shortcuts later:
+
+```bash
+./uninstall-posture-vision.sh
+```
+
+Remove shortcuts and local saved data:
+
+```bash
+./uninstall-posture-vision.sh --remove-local-data
 ```
 
 ## Windows Launcher
@@ -112,7 +155,8 @@ Tray hotkeys:
 - The launcher is single-instance aware. Opening Posture Vision again restores/focuses the existing app window instead of creating another one.
 - Use **Settings > Start camera when app opens** to control automatic camera startup after consent is accepted.
 - Use **Minimize to tray** instead of closing the standalone app window. Closing the window stops camera processing.
-- Minimized posture reminders are queued to the Posture Vision tray helper, which shows a custom topmost alert popup instead of relying on Windows notification balloons.
+- On Windows, minimized posture reminders are queued to the Posture Vision tray helper, which shows native Windows notifications.
+- On Linux, posture reminders use `notify-send` when it is available.
 - Browser notifications are not used, so reminders should not appear twice.
 - Use **Automation > Spoken announcements** to turn voice announcements on or off, and **Test announcement** to verify audio.
 - Settings, calibration, consent, statistics, profiles, and habit logs are stored in a portable SQLite database at `data\posture-vision.db`.

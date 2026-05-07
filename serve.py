@@ -31,6 +31,9 @@ CONTROL_STATE = {
 
 
 def startup_shortcut_path():
+    if sys.platform != "win32":
+        return Path.home() / ".config" / "autostart" / "posture-vision.desktop"
+
     startup = Path(os.environ["APPDATA"]) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup"
     return startup / f"{APP_NAME}.lnk"
 
@@ -132,11 +135,25 @@ def read_json_body(handler):
 
 
 def native_notify(title, message):
+    safe_title = str(title or APP_NAME)[:64]
+    safe_message = str(message or "")[:255]
+
+    if sys.platform.startswith("linux"):
+        notify_send = shutil.which("notify-send")
+        if not notify_send:
+            return False
+
+        subprocess.Popen(
+            [notify_send, safe_title, safe_message, "--app-name", APP_NAME, "--urgency", "normal"],
+            cwd=str(ROOT),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        return True
+
     if sys.platform != "win32":
         return False
 
-    safe_title = str(title or APP_NAME)[:64]
-    safe_message = str(message or "")[:255]
     command = f"""
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
@@ -158,6 +175,40 @@ $icon.Dispose()
         creationflags=subprocess.CREATE_NO_WINDOW,
     )
     return True
+
+
+def lock_workstation():
+    if sys.platform == "win32":
+        locked = ctypes.windll.user32.LockWorkStation()
+        if not locked:
+            raise OSError("LockWorkStation returned 0")
+        return True
+
+    if sys.platform.startswith("linux"):
+        commands = [
+            ["loginctl", "lock-session"],
+            ["xdg-screensaver", "lock"],
+            ["gnome-screensaver-command", "-l"],
+            ["qdbus", "org.freedesktop.ScreenSaver", "/ScreenSaver", "Lock"],
+        ]
+
+        for command in commands:
+            executable = shutil.which(command[0])
+            if not executable:
+                continue
+            result = subprocess.run(
+                [executable, *command[1:]],
+                cwd=str(ROOT),
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            )
+            if result.returncode == 0:
+                return True
+
+        raise OSError("No supported Linux lock command was found")
+
+    raise OSError("Computer lock is only implemented for Windows and Linux")
 
 
 def queue_notification(title, body, announce=False):
@@ -476,9 +527,9 @@ def requirements_payload():
     python_version = sys.version_info
     requirements = [
         {
-            "name": "Windows 10 or 11",
-            "ok": sys.platform == "win32",
-            "detail": "Required for startup shortcuts, tray helper, and auto-lock.",
+            "name": "Supported desktop OS",
+            "ok": sys.platform == "win32" or sys.platform.startswith("linux"),
+            "detail": "Windows has full tray support. Linux supports local server launchers, desktop/autostart files, notify-send notifications, and common lock commands.",
         },
         {
             "name": "Python 3.10 or newer",
@@ -508,7 +559,7 @@ def requirements_payload():
         {
             "name": "PowerShell script execution",
             "ok": True,
-            "detail": "Launchers and native Windows reminders use PowerShell with ExecutionPolicy Bypass for this app script only.",
+            "detail": "Windows launchers use PowerShell. Linux launchers use Bash shell scripts.",
         },
     ]
 
@@ -577,10 +628,29 @@ class Handler(SimpleHTTPRequestHandler):
 
         if self.path == "/startup/install":
             try:
-                if sys.platform != "win32":
-                    self.send_error(501, "Startup install is only implemented for Windows")
+                if sys.platform == "win32":
+                    run_script(root, "install-startup.ps1")
+                elif sys.platform.startswith("linux"):
+                    startup_path = startup_shortcut_path()
+                    startup_path.parent.mkdir(parents=True, exist_ok=True)
+                    launcher = ROOT / "launch-posture-vision.sh"
+                    startup_path.write_text(
+                        "\n".join(
+                            [
+                                "[Desktop Entry]",
+                                "Type=Application",
+                                f"Name={APP_NAME}",
+                                f"Exec={launcher}",
+                                "Terminal=false",
+                                "X-GNOME-Autostart-enabled=true",
+                                "",
+                            ]
+                        ),
+                        encoding="utf-8",
+                    )
+                else:
+                    self.send_error(501, "Startup install is only implemented for Windows and Linux")
                     return
-                run_script(root, "install-startup.ps1")
                 json_response(self, {"ok": True, "installed": startup_shortcut_path().exists()})
             except Exception as error:
                 self.send_error(500, f"Could not install startup shortcut: {error}")
@@ -605,7 +675,10 @@ class Handler(SimpleHTTPRequestHandler):
             try:
                 payload = read_json_body(self) or {}
                 announce = bool(payload.get("announce"))
-                start_tray_helper()
+                if sys.platform == "win32":
+                    start_tray_helper()
+                else:
+                    native_notify(payload.get("title"), payload.get("body"))
                 item = queue_notification(payload.get("title"), payload.get("body"), announce)
                 json_response(self, {"ok": True, "queued": item["seq"]})
             except Exception as error:
@@ -660,15 +733,8 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_error(404, "Not found")
             return
 
-        if sys.platform != "win32":
-            self.send_error(501, "Computer lock is only implemented for Windows")
-            return
-
         try:
-            locked = ctypes.windll.user32.LockWorkStation()
-            if not locked:
-                raise OSError("LockWorkStation returned 0")
-
+            lock_workstation()
             json_response(self, {"ok": True})
         except Exception as error:
             self.send_error(500, f"Could not lock workstation: {error}")
