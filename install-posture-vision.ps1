@@ -15,10 +15,79 @@ if (-not (Test-Path $LauncherPath)) {
     throw "Launcher not found: $LauncherPath"
 }
 
-if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
-    throw "Python was not found. Install Python 3, then run this installer again."
+function Test-PythonCommand {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$FilePath,
+
+        [string[]]$Arguments = @()
+    )
+
+    try {
+        $output = & $FilePath @Arguments -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)" 2>$null
+        return $LASTEXITCODE -eq 0
+    } catch {
+        return $false
+    }
 }
 
+function Get-PosturePython {
+    $python = Get-Command python -ErrorAction SilentlyContinue
+    if ($python -and (Test-PythonCommand -FilePath $python.Source)) {
+        return $python.Source
+    }
+
+    $py = Get-Command py -ErrorAction SilentlyContinue
+    if ($py -and (Test-PythonCommand -FilePath $py.Source -Arguments @("-3"))) {
+        return $py.Source
+    }
+
+    $roots = @(
+        (Join-Path $env:LOCALAPPDATA "Programs\Python"),
+        $env:ProgramFiles,
+        ${env:ProgramFiles(x86)}
+    )
+
+    foreach ($root in $roots) {
+        if (-not $root -or -not (Test-Path $root)) {
+            continue
+        }
+
+        $candidate = Get-ChildItem -Path $root -Recurse -Filter python.exe -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -notlike "*WindowsApps*" } |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+
+        if ($candidate -and (Test-PythonCommand -FilePath $candidate.FullName)) {
+            return $candidate.FullName
+        }
+    }
+
+    return $null
+}
+
+function Install-PythonIfMissing {
+    if (Get-PosturePython) {
+        return
+    }
+
+    $winget = Get-Command winget -ErrorAction SilentlyContinue
+    if (-not $winget) {
+        throw "Python 3.10+ was not found and winget is not available. Install Python 3.10 or newer, then run this installer again."
+    }
+
+    Write-Output "Python 3.10+ was not found. Installing Python 3.12 with winget..."
+    & $winget.Source install --id Python.Python.3.12 --source winget --scope user --silent --accept-package-agreements --accept-source-agreements
+    if ($LASTEXITCODE -ne 0) {
+        throw "Python installation failed. Install Python 3.10 or newer, then run this installer again."
+    }
+
+    if (-not (Get-PosturePython)) {
+        throw "Python was installed, but this PowerShell session cannot find it yet. Close this window, reopen the installer, and run it again."
+    }
+}
+
+Install-PythonIfMissing
 New-Item -ItemType Directory -Force -Path $DataDir | Out-Null
 
 function New-PostureShortcut {

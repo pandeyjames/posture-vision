@@ -16,11 +16,13 @@ Open `http://127.0.0.1:8765` in a browser, allow camera access, sit upright, and
 Prerequisites:
 
 - Windows 10 or Windows 11
-- Python 3.10 or newer available as `python`
+- Internet access during first-time install if Python is not already installed
 - Microsoft Edge or Google Chrome for the standalone app window
 - A webcam that can see your head and shoulders while seated
 - Internet access for the current MediaPipe runtime/model files
 - PowerShell, included with Windows, for the launcher and shortcuts
+
+The installer checks for Python 3.10 or newer. If Python is missing, it attempts to install Python 3.12 automatically with Windows Package Manager (`winget`).
 
 For normal use, double-click:
 

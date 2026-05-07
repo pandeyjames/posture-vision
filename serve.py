@@ -483,7 +483,7 @@ def requirements_payload():
         {
             "name": "Python 3.10 or newer",
             "ok": python_version >= (3, 10),
-            "detail": f"Detected Python {sys.version.split()[0]}.",
+            "detail": f"Detected Python {sys.version.split()[0]}. The installer can install Python 3.12 automatically with winget if Python is missing.",
         },
         {
             "name": "SQLite local database",

@@ -44,6 +44,57 @@ function Get-AppBrowser {
     return $null
 }
 
+function Test-PythonCommand {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$FilePath,
+
+        [string[]]$Arguments = @()
+    )
+
+    try {
+        & $FilePath @Arguments -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)" 2>$null
+        return $LASTEXITCODE -eq 0
+    } catch {
+        return $false
+    }
+}
+
+function Get-PythonLaunch {
+    $python = Get-Command python -ErrorAction SilentlyContinue
+    if ($python -and (Test-PythonCommand -FilePath $python.Source)) {
+        return @{ FilePath = $python.Source; Arguments = @("serve.py") }
+    }
+
+    $py = Get-Command py -ErrorAction SilentlyContinue
+    if ($py -and (Test-PythonCommand -FilePath $py.Source -Arguments @("-3"))) {
+        return @{ FilePath = $py.Source; Arguments = @("-3", "serve.py") }
+    }
+
+    $roots = @(
+        (Join-Path $env:LOCALAPPDATA "Programs\Python"),
+        $env:ProgramFiles,
+        ${env:ProgramFiles(x86)}
+    )
+
+    foreach ($root in $roots) {
+        if (-not $root -or -not (Test-Path $root)) {
+            continue
+        }
+
+        $candidate = Get-ChildItem -Path $root -Recurse -Filter python.exe -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -notlike "*WindowsApps*" } |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+
+        if ($candidate -and (Test-PythonCommand -FilePath $candidate.FullName)) {
+            return @{ FilePath = $candidate.FullName; Arguments = @("serve.py") }
+        }
+    }
+
+    return $null
+}
+
 function Open-PostureApp {
     if ($BrowserTab) {
         Start-Process $Url
@@ -75,10 +126,14 @@ function Open-PostureApp {
 }
 
 if (-not (Test-PostureServer)) {
-    $python = Get-Command python -ErrorAction Stop
+    $python = Get-PythonLaunch
+    if (-not $python) {
+        throw "Python 3.10+ was not found. Run Install Posture Vision.cmd first so Python can be installed automatically."
+    }
+
     Start-Process `
-        -FilePath $python.Source `
-        -ArgumentList "serve.py" `
+        -FilePath $python.FilePath `
+        -ArgumentList $python.Arguments `
         -WorkingDirectory $AppDir `
         -WindowStyle Hidden
 
