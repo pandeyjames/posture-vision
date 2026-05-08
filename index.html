@@ -21,6 +21,18 @@
         <div class="camera-wrap">
           <video id="video" playsinline muted></video>
           <canvas id="overlay"></canvas>
+          <div id="framingGuide" class="framing-guide idle" aria-live="polite">
+            <div class="framing-box" aria-hidden="true"></div>
+            <div class="framing-panel">
+              <strong id="framingTitle">Frame yourself</strong>
+              <div class="framing-checks">
+                <span id="framingHead">Head</span>
+                <span id="framingLeftShoulder">Left shoulder</span>
+                <span id="framingRightShoulder">Right shoulder</span>
+                <span id="framingCentered">Centered</span>
+              </div>
+            </div>
+          </div>
           <div id="distanceCue" class="distance-cue idle" aria-live="polite">
             <div class="distance-cue-head">
               <span>Distance</span>

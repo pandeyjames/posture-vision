@@ -6,6 +6,12 @@ import {
 const video = document.querySelector("#video");
 const canvas = document.querySelector("#overlay");
 const ctx = canvas.getContext("2d");
+const framingGuide = document.querySelector("#framingGuide");
+const framingTitle = document.querySelector("#framingTitle");
+const framingHead = document.querySelector("#framingHead");
+const framingLeftShoulder = document.querySelector("#framingLeftShoulder");
+const framingRightShoulder = document.querySelector("#framingRightShoulder");
+const framingCentered = document.querySelector("#framingCentered");
 const distanceCue = document.querySelector("#distanceCue");
 const distanceCueText = document.querySelector("#distanceCueText");
 const distanceCueMarker = document.querySelector("#distanceCueMarker");
@@ -823,6 +829,7 @@ function showSavedCalibration(savedAt) {
   calibrationText.textContent = "Saved baseline loaded";
   calibrationBar.style.width = "100%";
   calibrationCard.className = "calibration-card done";
+  updateFramingGuide(null);
   calibrationHelp.textContent = savedAt
     ? `Saved calibration loaded from ${new Date(savedAt).toLocaleString()}. Recalibrate if your camera or chair moved.`
     : "Saved calibration loaded. Recalibrate if your camera or chair moved.";
@@ -898,6 +905,7 @@ function clearSavedCalibration() {
   calibrationHelp.textContent = hasCameraStarted
     ? "Collecting seated posture frames. Keep your head and shoulders in view."
     : "Start the camera, sit upright, and keep your head and shoulders visible.";
+  updateFramingGuide(null);
   setStatus("Saved calibration cleared. Calibrate again while seated upright.", "neutral");
 }
 
@@ -1069,6 +1077,44 @@ function drawPose(landmarks) {
     ctx.arc(point.x * width, point.y * height, 6, 0, Math.PI * 2);
     ctx.fill();
   });
+}
+
+function setFramingCheck(element, ok) {
+  if (!element) return;
+  element.classList.toggle("good", ok);
+}
+
+function updateFramingGuide(landmarks) {
+  if (!framingGuide || !framingTitle) return;
+
+  const active = hasCameraStarted && !calibrated && !cameraSleeping;
+  framingGuide.classList.toggle("hidden", !active);
+  if (!active) return;
+
+  const hasHead =
+    landmarks &&
+    (
+      visible(landmarks, LANDMARKS.nose, 0.45) ||
+      visible(landmarks, LANDMARKS.leftEye, 0.35) ||
+      visible(landmarks, LANDMARKS.rightEye, 0.35)
+    );
+  const hasLeftShoulder = Boolean(landmarks && visible(landmarks, LANDMARKS.leftShoulder, 0.45));
+  const hasRightShoulder = Boolean(landmarks && visible(landmarks, LANDMARKS.rightShoulder, 0.45));
+  const centered = Boolean(
+    hasLeftShoulder &&
+    hasRightShoulder &&
+    Math.abs(
+      midpoint(landmarks[LANDMARKS.leftShoulder], landmarks[LANDMARKS.rightShoulder]).x - 0.5
+    ) < 0.22
+  );
+  const ready = hasHead && hasLeftShoulder && hasRightShoulder && centered;
+
+  setFramingCheck(framingHead, hasHead);
+  setFramingCheck(framingLeftShoulder, hasLeftShoulder);
+  setFramingCheck(framingRightShoulder, hasRightShoulder);
+  setFramingCheck(framingCentered, centered);
+  framingGuide.className = `framing-guide ${ready ? "ready" : "idle"}`;
+  framingTitle.textContent = ready ? "Good framing for calibration" : "Frame head and shoulders";
 }
 
 function updateDistanceCue(metrics) {
@@ -1389,6 +1435,7 @@ function stopCameraStream() {
   video.srcObject = null;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   updateDistanceCue(null);
+  updateFramingGuide(null);
   cameraState.classList.remove("hidden");
 }
 
@@ -1572,6 +1619,7 @@ function loop() {
     const worldLandmarks = result.worldLandmarks?.[0];
 
     drawPose(landmarks);
+    updateFramingGuide(landmarks);
 
     if (!landmarks) {
       updateDistanceCue(null);
@@ -1670,6 +1718,7 @@ function calibrate() {
   calibrationBar.style.width = "100%";
   calibrationCard.className = "calibration-card done";
   calibrationHelp.textContent = "Calibrated. Press Recalibrate upright any time your sitting position or camera angle changes.";
+  updateFramingGuide(null);
   saveState();
   setStatus("Calibration saved. Monitoring forward lean.", "good");
 }
