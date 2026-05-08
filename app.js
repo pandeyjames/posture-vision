@@ -9,6 +9,9 @@ const ctx = canvas.getContext("2d");
 const distanceCue = document.querySelector("#distanceCue");
 const distanceCueText = document.querySelector("#distanceCueText");
 const distanceCueMarker = document.querySelector("#distanceCueMarker");
+const tabs = document.querySelector(".tabs");
+const tabsPrevBtn = document.querySelector("#tabsPrevBtn");
+const tabsNextBtn = document.querySelector("#tabsNextBtn");
 const tabButtons = document.querySelectorAll(".tab-button");
 const tabPanels = document.querySelectorAll(".tab-panel");
 const consentModal = document.querySelector("#consentModal");
@@ -263,12 +266,35 @@ function updateConsentModal() {
 }
 
 function activateTab(tabId) {
+  let activeButton = null;
   tabButtons.forEach((button) => {
-    button.classList.toggle("active", button.dataset.tab === tabId);
+    const active = button.dataset.tab === tabId;
+    button.classList.toggle("active", active);
+    if (active) activeButton = button;
   });
 
   tabPanels.forEach((panel) => {
     panel.classList.toggle("active", panel.id === tabId);
+  });
+
+  activeButton?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+  requestAnimationFrame(updateTabScrollButtons);
+}
+
+function updateTabScrollButtons() {
+  if (!tabs || !tabsPrevBtn || !tabsNextBtn) return;
+
+  const maxScroll = tabs.scrollWidth - tabs.clientWidth;
+  tabsPrevBtn.disabled = tabs.scrollLeft <= 2;
+  tabsNextBtn.disabled = tabs.scrollLeft >= maxScroll - 2;
+}
+
+function scrollTabs(direction) {
+  if (!tabs) return;
+
+  tabs.scrollBy({
+    left: direction * Math.max(120, Math.round(tabs.clientWidth * 0.7)),
+    behavior: "smooth"
   });
 }
 
@@ -1780,6 +1806,9 @@ async function pollControlCommands() {
 tabButtons.forEach((button) => {
   button.addEventListener("click", () => activateTab(button.dataset.tab));
 });
+tabsPrevBtn?.addEventListener("click", () => scrollTabs(-1));
+tabsNextBtn?.addEventListener("click", () => scrollTabs(1));
+tabs?.addEventListener("scroll", () => requestAnimationFrame(updateTabScrollButtons));
 consentCheck.addEventListener("change", () => {
   acceptConsentBtn.disabled = !consentCheck.checked;
 });
@@ -1978,6 +2007,7 @@ habitTracking.addEventListener("change", () => {
 });
 expressionTracking.addEventListener("change", saveState);
 window.addEventListener("resize", resizeCanvas);
+window.addEventListener("resize", updateTabScrollButtons);
 window.addEventListener("beforeunload", () => {
   if (dailyStats) saveDailyStats();
 });
@@ -2001,6 +2031,7 @@ async function initializeApp() {
   setInterval(updateMuteButton, 60000);
   setInterval(updateStorageStatus, 60000);
   await refreshCameraList().catch((error) => console.warn("Could not list cameras", error));
+  updateTabScrollButtons();
   autoStartCameraIfEnabled();
 }
 

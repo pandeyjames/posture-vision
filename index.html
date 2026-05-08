@@ -45,13 +45,17 @@
             <span id="statusText">Start camera, sit upright, then calibrate.</span>
           </div>
 
-          <div class="tabs" role="tablist" aria-label="Posture Vision sections">
-            <button class="tab-button active" type="button" data-tab="monitorTab">Monitor</button>
-            <button class="tab-button" type="button" data-tab="automationTab">Auto</button>
-            <button class="tab-button" type="button" data-tab="settingsTab">Settings</button>
-            <button class="tab-button" type="button" data-tab="statisticsTab">Stats</button>
-            <button class="tab-button" type="button" data-tab="habitsTab">Habits</button>
-            <button class="tab-button" type="button" data-tab="aboutTab">About</button>
+          <div class="tab-strip" aria-label="Posture Vision sections">
+            <button id="tabsPrevBtn" class="tab-scroll-button" type="button" aria-label="Previous tabs">&lt;</button>
+            <div class="tabs" role="tablist">
+              <button class="tab-button active" type="button" data-tab="monitorTab">Monitor</button>
+              <button class="tab-button" type="button" data-tab="automationTab">Auto</button>
+              <button class="tab-button" type="button" data-tab="settingsTab">Settings</button>
+              <button class="tab-button" type="button" data-tab="statisticsTab">Stats</button>
+              <button class="tab-button" type="button" data-tab="habitsTab">Habits</button>
+              <button class="tab-button" type="button" data-tab="aboutTab">About</button>
+            </div>
+            <button id="tabsNextBtn" class="tab-scroll-button" type="button" aria-label="Next tabs">&gt;</button>
           </div>
 
           <section id="monitorTab" class="tab-panel active">

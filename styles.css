@@ -285,17 +285,49 @@ h1 {
   gap: 8px;
 }
 
-.tabs {
+.tab-strip {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 34px minmax(0, 1fr) 34px;
+  gap: 4px;
+  align-items: stretch;
+}
+
+.tabs {
+  display: flex;
   gap: 4px;
   padding: 5px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-behavior: smooth;
+  scrollbar-width: none;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #f1f5f4;
 }
 
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
+button.tab-scroll-button {
+  min-height: 34px;
+  padding: 0;
+  color: var(--accent-strong);
+  background: #eef4f2;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+button.tab-scroll-button:disabled {
+  color: #a7b2af;
+  cursor: default;
+  opacity: 0.55;
+}
+
 button.tab-button {
+  flex: 0 0 auto;
   min-height: 34px;
   padding: 7px 10px;
   color: var(--muted);
@@ -803,10 +835,6 @@ body.compact .status-card {
   .camera-wrap {
     min-height: auto;
     aspect-ratio: 16 / 9;
-  }
-
-  .tabs {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   button.tab-button {
