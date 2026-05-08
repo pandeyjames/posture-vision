@@ -816,6 +816,18 @@ body.compact .panel {
   gap: 12px;
 }
 
+body.compact .tab-strip {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+body.compact .tab-scroll-button {
+  display: none;
+}
+
+body.compact .tabs {
+  justify-content: center;
+}
+
 body.compact h1,
 body.compact .calibration-card,
 body.compact .status-card {
