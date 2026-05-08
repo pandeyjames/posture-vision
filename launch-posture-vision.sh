@@ -44,6 +44,35 @@ urlopen("$URL/index.html", timeout=2).read()
 PY
 }
 
+centered_window_args() {
+  local width=1280
+  local height=900
+  local left=80
+  local top=80
+
+  if command -v xrandr >/dev/null 2>&1; then
+    local geometry
+    geometry="$(xrandr --current 2>/dev/null | awk '/ connected primary/{print $4; exit} / connected/{print $3; exit}')"
+    if [[ "$geometry" =~ ^([0-9]+)x([0-9]+)\+([-0-9]+)\+([-0-9]+)$ ]]; then
+      local screen_width="${BASH_REMATCH[1]}"
+      local screen_height="${BASH_REMATCH[2]}"
+      local screen_left="${BASH_REMATCH[3]}"
+      local screen_top="${BASH_REMATCH[4]}"
+
+      width=$(( screen_width - 120 ))
+      height=$(( screen_height - 120 ))
+      [ "$width" -gt 1280 ] && width=1280
+      [ "$height" -gt 900 ] && height=900
+      [ "$width" -lt 900 ] && width=900
+      [ "$height" -lt 700 ] && height=700
+      left=$(( screen_left + (screen_width - width) / 2 ))
+      top=$(( screen_top + (screen_height - height) / 2 ))
+    fi
+  fi
+
+  printf '%s\n' "--window-size=$width,$height" "--window-position=$left,$top"
+}
+
 open_browser() {
   if [ "$browser_tab" -eq 1 ]; then
     if command -v xdg-open >/dev/null 2>&1; then
@@ -63,6 +92,8 @@ open_browser() {
     "--disable-renderer-backgrounding"
     "--disable-backgrounding-occluded-windows"
   )
+  mapfile -t centered_args < <(centered_window_args)
+  args+=("${centered_args[@]}")
 
   for browser in microsoft-edge-stable microsoft-edge google-chrome-stable google-chrome chromium chromium-browser; do
     if command -v "$browser" >/dev/null 2>&1; then

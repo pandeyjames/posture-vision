@@ -44,6 +44,23 @@ function Get-AppBrowser {
     return $null
 }
 
+function Get-CenteredWindowArgs {
+    $fallback = @("--window-size=1280,900", "--window-position=80,80")
+
+    try {
+        Add-Type -AssemblyName System.Windows.Forms -ErrorAction Stop
+        $area = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
+        $width = [Math]::Min(1280, [Math]::Max(900, $area.Width - 120))
+        $height = [Math]::Min(900, [Math]::Max(700, $area.Height - 120))
+        $left = [Math]::Max($area.Left, [int]($area.Left + (($area.Width - $width) / 2)))
+        $top = [Math]::Max($area.Top, [int]($area.Top + (($area.Height - $height) / 2)))
+
+        return @("--window-size=$width,$height", "--window-position=$left,$top")
+    } catch {
+        return $fallback
+    }
+}
+
 function Test-PythonCommand {
     param(
         [Parameter(Mandatory = $true)]
@@ -115,6 +132,7 @@ function Open-PostureApp {
             "--disable-backgrounding-occluded-windows",
             "--disable-features=CalculateNativeWinOcclusion"
         )
+        $browserArgs += Get-CenteredWindowArgs
 
         Start-Process `
             -FilePath $browser `
