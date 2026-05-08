@@ -6,6 +6,9 @@ import {
 const video = document.querySelector("#video");
 const canvas = document.querySelector("#overlay");
 const ctx = canvas.getContext("2d");
+const distanceCue = document.querySelector("#distanceCue");
+const distanceCueText = document.querySelector("#distanceCueText");
+const distanceCueMarker = document.querySelector("#distanceCueMarker");
 const tabButtons = document.querySelectorAll(".tab-button");
 const tabPanels = document.querySelectorAll(".tab-panel");
 const consentModal = document.querySelector("#consentModal");
@@ -926,6 +929,43 @@ function drawPose(landmarks) {
   });
 }
 
+function updateDistanceCue(metrics) {
+  if (!distanceCue || !distanceCueText || !distanceCueMarker) return;
+
+  if (!metrics) {
+    distanceCue.className = "distance-cue idle";
+    distanceCueText.textContent = hasCameraStarted ? "Finding pose" : "Waiting";
+    distanceCueMarker.style.left = "50%";
+    return;
+  }
+
+  if (!baseline) {
+    distanceCue.className = "distance-cue idle";
+    distanceCueText.textContent = "Calibrate";
+    distanceCueMarker.style.left = "50%";
+    return;
+  }
+
+  const ratio = metrics.faceScale / Math.max(baseline.faceScale, 0.001);
+  const markerPercent = Math.max(0, Math.min(100, ((ratio - 0.68) / 0.72) * 100));
+  const closeLimit = distanceWarning.value === "strict" ? 1.12 : 1.2;
+  const farLimit = 0.82;
+  let cue = "good";
+  let label = "Good";
+
+  if (ratio > closeLimit) {
+    cue = "close";
+    label = "Too close";
+  } else if (ratio < farLimit) {
+    cue = "far";
+    label = "Too far";
+  }
+
+  distanceCue.className = `distance-cue ${cue}`;
+  distanceCueText.textContent = label;
+  distanceCueMarker.style.left = `${markerPercent}%`;
+}
+
 function updateScore(score) {
   const rounded = Math.round(score);
   scoreText.textContent = `${rounded}%`;
@@ -1206,6 +1246,7 @@ function stopCameraStream() {
   stream = null;
   video.srcObject = null;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+  updateDistanceCue(null);
   cameraState.classList.remove("hidden");
 }
 
@@ -1391,6 +1432,7 @@ function loop() {
     drawPose(landmarks);
 
     if (!landmarks) {
+      updateDistanceCue(null);
       updateCameraHealth(false);
       poseText.textContent = "Not found";
       recordPostureStats(0, false);
@@ -1406,6 +1448,7 @@ function loop() {
     } else {
       const metrics = getMetrics(landmarks, worldLandmarks);
       if (!metrics) {
+        updateDistanceCue(null);
         updateCameraHealth(false);
         poseText.textContent = "Partial";
         recordPostureStats(0, false);
@@ -1428,6 +1471,7 @@ function loop() {
         const score = scorePosture(metrics);
         recordPostureStats(score, true);
         updateScore(score);
+        updateDistanceCue(metrics);
         updateDistanceWarning(metrics);
         updateHabitSignals(metrics);
         handlePosture(score);

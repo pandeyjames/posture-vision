@@ -21,6 +21,18 @@
         <div class="camera-wrap">
           <video id="video" playsinline muted></video>
           <canvas id="overlay"></canvas>
+          <div id="distanceCue" class="distance-cue idle" aria-live="polite">
+            <div class="distance-cue-head">
+              <span>Distance</span>
+              <strong id="distanceCueText">Waiting</strong>
+            </div>
+            <div class="distance-cue-track" aria-hidden="true">
+              <span class="distance-zone far"></span>
+              <span class="distance-zone good"></span>
+              <span class="distance-zone close"></span>
+              <span id="distanceCueMarker" class="distance-cue-marker"></span>
+            </div>
+          </div>
           <div id="cameraState" class="camera-state">Camera is off</div>
         </div>
         <aside class="panel">
