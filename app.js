@@ -80,6 +80,9 @@ const healthText = document.querySelector("#healthText");
 const resetStatsBtn = document.querySelector("#resetStatsBtn");
 const exportStatsBtn = document.querySelector("#exportStatsBtn");
 const weeklyList = document.querySelector("#weeklyList");
+const postureTimeline = document.querySelector("#postureTimeline");
+const timelineEvents = document.querySelector("#timelineEvents");
+const timelineCountText = document.querySelector("#timelineCountText");
 const exportHabitsBtn = document.querySelector("#exportHabitsBtn");
 const resetHabitsBtn = document.querySelector("#resetHabitsBtn");
 const habitTracking = document.querySelector("#habitTracking");
@@ -132,6 +135,7 @@ let lastDistanceWarningAt = 0;
 let habitStats;
 let lastHabitEventAt = {};
 let lastMetricsForHabits = null;
+let lastTimelineEventAt = {};
 
 const MIN_CALIBRATION_SAMPLES = 15;
 const PERIODIC_CHECK_DURATION_MS = 8000;
@@ -169,6 +173,14 @@ const CONNECTIONS = [
   [0, 11],
   [0, 12]
 ];
+
+const TIMELINE_LABELS = {
+  lean: "Leaning forward",
+  close: "Too close to screen",
+  leftTilt: "Left tilt",
+  rightTilt: "Right tilt",
+  absent: "Away from camera"
+};
 
 function clampLeanThreshold(value) {
   const numeric = Number(value);
@@ -577,14 +589,23 @@ function emptyDailyStats() {
     absentEvents: 0,
     reminders: 0,
     breaks: 0,
-    worstScore: 0
+    worstScore: 0,
+    timeline: []
+  };
+}
+
+function normalizeDailyStats(stats) {
+  return {
+    ...emptyDailyStats(),
+    ...(stats || {}),
+    timeline: Array.isArray(stats?.timeline) ? stats.timeline : []
   };
 }
 
 function loadDailyStats() {
   try {
     const payload = JSON.parse(localStorage.getItem(STATS_KEY) || "null");
-    dailyStats = payload || emptyDailyStats();
+    dailyStats = normalizeDailyStats(payload);
     archiveDailyStatsIfNeeded();
   } catch {
     dailyStats = emptyDailyStats();
@@ -622,7 +643,58 @@ function renderDailyStats() {
   breakCountText.textContent = String(dailyStats.breaks || 0);
   absenceCountText.textContent = String(dailyStats.absentEvents);
   worstScoreText.textContent = `${Math.round(dailyStats.worstScore)}%`;
+  renderTimeline();
   renderWeeklyStats();
+}
+
+function timelineClass(type) {
+  if (type === "leftTilt" || type === "rightTilt") return type;
+  return type;
+}
+
+function timelineLabel(event) {
+  const base = TIMELINE_LABELS[event.type] || event.type;
+  if (event.detail?.score !== undefined) return `${base} (${Math.round(event.detail.score)}%)`;
+  return base;
+}
+
+function renderTimeline() {
+  if (!postureTimeline || !timelineEvents || !timelineCountText || !dailyStats) return;
+
+  const events = Array.isArray(dailyStats.timeline) ? dailyStats.timeline : [];
+  timelineCountText.textContent = `${events.length} ${events.length === 1 ? "event" : "events"}`;
+  postureTimeline.innerHTML = "";
+  timelineEvents.innerHTML = "";
+
+  if (!events.length) {
+    const empty = document.createElement("div");
+    empty.className = "timeline-empty";
+    empty.textContent = "No posture events recorded today.";
+    postureTimeline.appendChild(empty);
+    return;
+  }
+
+  const dayStart = new Date(`${dailyStats.date}T00:00:00`);
+  const dayMs = 24 * 60 * 60 * 1000;
+  events.slice(-240).forEach((event) => {
+    const at = new Date(event.at);
+    if (Number.isNaN(at.getTime())) return;
+    const percent = Math.max(0, Math.min(100, ((at - dayStart) / dayMs) * 100));
+    const marker = document.createElement("span");
+    marker.className = `timeline-marker ${timelineClass(event.type)}`;
+    marker.style.left = `${percent}%`;
+    marker.title = `${at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} - ${timelineLabel(event)}`;
+    postureTimeline.appendChild(marker);
+  });
+
+  events.slice(-8).reverse().forEach((event) => {
+    const at = new Date(event.at);
+    const item = document.createElement("div");
+    item.className = "timeline-event";
+    const time = Number.isNaN(at.getTime()) ? "" : at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    item.innerHTML = `<time>${time}</time><span>${escapeHtml(timelineLabel(event))}</span>`;
+    timelineEvents.appendChild(item);
+  });
 }
 
 function resetDailyStats() {
@@ -631,9 +703,50 @@ function resetDailyStats() {
   persistJson(HISTORY_KEY, history);
   dailyStats = emptyDailyStats();
   lastStatsAt = null;
+  lastTimelineEventAt = {};
   absenceCounted = false;
   saveDailyStats();
   renderDailyStats();
+}
+
+function recordTimelineEvent(type, detail = {}, minimumGapMs = 60000) {
+  if (!dailyStats || dailyStats.date !== todayKey()) {
+    archiveDailyStatsIfNeeded();
+    dailyStats = emptyDailyStats();
+  }
+
+  const now = performance.now();
+  if (now - (lastTimelineEventAt[type] || 0) < minimumGapMs) return;
+  lastTimelineEventAt[type] = now;
+
+  dailyStats.timeline ??= [];
+  dailyStats.timeline.push({
+    type,
+    detail,
+    at: new Date().toISOString()
+  });
+  if (dailyStats.timeline.length > 500) dailyStats.timeline.shift();
+  saveDailyStats();
+  renderTimeline();
+}
+
+function recordTimelineSignals(metrics, score) {
+  if (!calibrated || !baseline || !metrics) return;
+
+  if (score >= getLeanThreshold()) {
+    recordTimelineEvent("lean", { score }, 60000);
+  }
+
+  const closeLimit = distanceWarning.value === "strict" ? 0.12 : 0.2;
+  const closeDelta = metrics.faceScale - baseline.faceScale;
+  if (closeDelta > closeLimit) {
+    recordTimelineEvent("close", { delta: closeDelta }, 60000);
+  }
+
+  const sideDelta = metrics.headSideOffset - baseline.headSideOffset;
+  if (sideDelta > 0.18) {
+    recordTimelineEvent(metrics.headSideDirection === "left" ? "leftTilt" : "rightTilt", { delta: sideDelta }, 60000);
+  }
 }
 
 function recordPostureStats(score, present) {
@@ -644,6 +757,9 @@ function recordPostureStats(score, present) {
 
   const now = performance.now();
   if (lastStatsAt === null || !present || cameraSleeping) {
+    if (calibrated && !present && !cameraSleeping) {
+      recordTimelineEvent("absent", {}, 60000);
+    }
     lastStatsAt = now;
     renderDailyStats();
     return;
@@ -1498,6 +1614,7 @@ function loop() {
         recordPostureStats(score, true);
         updateScore(score);
         updateDistanceCue(metrics);
+        recordTimelineSignals(metrics, score);
         updateDistanceWarning(metrics);
         updateHabitSignals(metrics);
         handlePosture(score);
