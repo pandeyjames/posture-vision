@@ -97,7 +97,9 @@ const habitTracking = document.querySelector("#habitTracking");
 const expressionTracking = document.querySelector("#expressionTracking");
 const leftTiltText = document.querySelector("#leftTiltText");
 const rightTiltText = document.querySelector("#rightTiltText");
-const handFaceText = document.querySelector("#handFaceText");
+const faceTouchText = document.querySelector("#faceTouchText");
+const chinRestText = document.querySelector("#chinRestText");
+const repeatedTiltText = document.querySelector("#repeatedTiltText");
 const restlessText = document.querySelector("#restlessText");
 const closeScreenText = document.querySelector("#closeScreenText");
 const neutralFaceText = document.querySelector("#neutralFaceText");
@@ -144,6 +146,8 @@ let habitStats;
 let lastHabitEventAt = {};
 let lastMetricsForHabits = null;
 let lastTimelineEventAt = {};
+let lastTiltDirection = null;
+let tiltRepeatCount = 0;
 let adaptiveProfile = {
   samples: 0,
   mean: 0,
@@ -541,6 +545,9 @@ function emptyHabitStats() {
       leftTilt: 0,
       rightTilt: 0,
       handFace: 0,
+      faceTouch: 0,
+      chinRest: 0,
+      repeatedTilt: 0,
       restless: 0,
       closeScreen: 0,
       neutralFace: 0
@@ -549,10 +556,27 @@ function emptyHabitStats() {
   };
 }
 
+function normalizeHabitStats(stats) {
+  const normalized = {
+    ...emptyHabitStats(),
+    ...(stats || {}),
+    counts: {
+      ...emptyHabitStats().counts,
+      ...(stats?.counts || {})
+    },
+    events: Array.isArray(stats?.events) ? stats.events : []
+  };
+
+  if (!normalized.counts.faceTouch && normalized.counts.handFace) {
+    normalized.counts.faceTouch = normalized.counts.handFace;
+  }
+  return normalized;
+}
+
 function loadHabitStats() {
   try {
     const payload = JSON.parse(localStorage.getItem(HABIT_KEY) || "null");
-    habitStats = payload?.date === todayKey() ? payload : emptyHabitStats();
+    habitStats = payload?.date === todayKey() ? normalizeHabitStats(payload) : emptyHabitStats();
   } catch {
     habitStats = emptyHabitStats();
   }
@@ -586,7 +610,9 @@ function renderHabitStats() {
 
   leftTiltText.textContent = String(habitStats.counts.leftTilt || 0);
   rightTiltText.textContent = String(habitStats.counts.rightTilt || 0);
-  handFaceText.textContent = String(habitStats.counts.handFace || 0);
+  faceTouchText.textContent = String(habitStats.counts.faceTouch || habitStats.counts.handFace || 0);
+  chinRestText.textContent = String(habitStats.counts.chinRest || 0);
+  repeatedTiltText.textContent = String(habitStats.counts.repeatedTilt || 0);
   restlessText.textContent = String(habitStats.counts.restless || 0);
   closeScreenText.textContent = String(habitStats.counts.closeScreen || 0);
   neutralFaceText.textContent = String(habitStats.counts.neutralFace || 0);
@@ -609,8 +635,14 @@ function buildHabitInsights() {
   if (left + right > 0) {
     insights.push(right > left ? "You tilt right more often than left today." : "You tilt left more often than right today.");
   }
-  if ((counts.handFace || 0) >= 3) {
-    insights.push("Hand-to-face events are recurring. This may indicate nail biting, chin resting, or face touching.");
+  if ((counts.repeatedTilt || 0) >= 3) {
+    insights.push("Repeated head tilt is showing up. Check monitor height and whether you are leaning toward one side.");
+  }
+  if ((counts.faceTouch || counts.handFace || 0) >= 3) {
+    insights.push("Face touching is recurring. This may indicate nail biting, face touching, or resting your hand near your mouth.");
+  }
+  if ((counts.chinRest || 0) >= 2) {
+    insights.push("Chin resting was detected. Try keeping both forearms supported and your screen at eye level.");
   }
   if ((counts.closeScreen || 0) >= 3) {
     insights.push("You repeatedly moved close to the screen. Consider moving the laptop farther back or increasing font size.");
@@ -1317,7 +1349,16 @@ function updateHabitSignals(metrics) {
 
   const sideDelta = metrics.headSideOffset - baseline.headSideOffset;
   if (sideDelta > 0.18) {
-    recordHabit(metrics.headSideDirection === "left" ? "leftTilt" : "rightTilt", { sideDelta });
+    const tiltType = metrics.headSideDirection === "left" ? "leftTilt" : "rightTilt";
+    recordHabit(tiltType, { sideDelta });
+    tiltRepeatCount = lastTiltDirection === tiltType ? tiltRepeatCount + 1 : 1;
+    lastTiltDirection = tiltType;
+    if (tiltRepeatCount >= 2) {
+      recordHabit("repeatedTilt", { direction: metrics.headSideDirection, sideDelta, repeats: tiltRepeatCount });
+    }
+  } else if (sideDelta < 0.08) {
+    tiltRepeatCount = 0;
+    lastTiltDirection = null;
   }
 
   const closeDelta = metrics.faceScale - baseline.faceScale;
@@ -1325,8 +1366,11 @@ function updateHabitSignals(metrics) {
     recordHabit("closeScreen", { closeDelta });
   }
 
-  if (metrics.handFaceProxy > 0.8) {
-    recordHabit("handFace", { score: metrics.handFaceProxy });
+  const dropDelta = metrics.headDrop - baseline.headDrop;
+  if (metrics.handFaceProxy > 0.86 && dropDelta > 0.04) {
+    recordHabit("chinRest", { score: metrics.handFaceProxy, dropDelta });
+  } else if (metrics.handFaceProxy > 0.76) {
+    recordHabit("faceTouch", { score: metrics.handFaceProxy });
   }
 
   if (lastMetricsForHabits) {
@@ -1860,6 +1904,8 @@ function resetHabits() {
   habitStats = emptyHabitStats();
   lastHabitEventAt = {};
   lastMetricsForHabits = null;
+  lastTiltDirection = null;
+  tiltRepeatCount = 0;
   saveHabitStats();
   renderHabitStats();
 }
