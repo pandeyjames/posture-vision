@@ -258,6 +258,15 @@
             </label>
 
             <label class="field">
+              <span>Adaptive sensitivity <strong id="adaptiveBufferText">Learning off</strong></span>
+              <select id="adaptiveSensitivity">
+                <option value="on" selected>On</option>
+                <option value="off">Off</option>
+              </select>
+            </label>
+            <p class="helper-text">Learns your normal seated movement after calibration and adds a small alert buffer when repeated near-threshold motion is normal for you.</p>
+
+            <label class="field">
               <span>Too-close warning</span>
               <select id="distanceWarning">
                 <option value="off" selected>Off</option>

@@ -50,6 +50,8 @@ const cameraMode = document.querySelector("#cameraMode");
 const autoStartCamera = document.querySelector("#autoStartCamera");
 const cameraSelect = document.querySelector("#cameraSelect");
 const checkInterval = document.querySelector("#checkInterval");
+const adaptiveSensitivity = document.querySelector("#adaptiveSensitivity");
+const adaptiveBufferText = document.querySelector("#adaptiveBufferText");
 const autoLockDelay = document.querySelector("#autoLockDelay");
 const breakInterval = document.querySelector("#breakInterval");
 const quietHoursEnabled = document.querySelector("#quietHoursEnabled");
@@ -142,6 +144,13 @@ let habitStats;
 let lastHabitEventAt = {};
 let lastMetricsForHabits = null;
 let lastTimelineEventAt = {};
+let adaptiveProfile = {
+  samples: 0,
+  mean: 0,
+  variance: 0,
+  buffer: 0,
+  updatedAt: null
+};
 
 const MIN_CALIBRATION_SAMPLES = 15;
 const PERIODIC_CHECK_DURATION_MS = 8000;
@@ -206,6 +215,41 @@ function setLeanThreshold(value, { markCustom = false, persist = false } = {}) {
 
 function getLeanThreshold() {
   return clampLeanThreshold(sensitivity.value);
+}
+
+function adaptiveSensitivityEnabled() {
+  return adaptiveSensitivity?.value === "on";
+}
+
+function adaptiveBuffer() {
+  if (!adaptiveSensitivityEnabled() || adaptiveProfile.samples < 60) return 0;
+  return Math.max(0, Math.min(18, Math.round(adaptiveProfile.buffer || 0)));
+}
+
+function getEffectiveLeanThreshold() {
+  return Math.max(0, Math.min(100, getLeanThreshold() + adaptiveBuffer()));
+}
+
+function updateAdaptiveReadout() {
+  if (!adaptiveBufferText) return;
+
+  if (!adaptiveSensitivityEnabled()) {
+    adaptiveBufferText.textContent = "Learning off";
+    return;
+  }
+
+  if (!calibrated) {
+    adaptiveBufferText.textContent = "Calibrate first";
+    return;
+  }
+
+  if (adaptiveProfile.samples < 60) {
+    adaptiveBufferText.textContent = `Learning ${adaptiveProfile.samples}/60`;
+    return;
+  }
+
+  const buffer = adaptiveBuffer();
+  adaptiveBufferText.textContent = buffer ? `+${buffer}% buffer` : "No buffer";
 }
 
 function setStatus(text, kind = "neutral") {
@@ -739,8 +783,8 @@ function recordTimelineEvent(type, detail = {}, minimumGapMs = 60000) {
 function recordTimelineSignals(metrics, score) {
   if (!calibrated || !baseline || !metrics) return;
 
-  if (score >= getLeanThreshold()) {
-    recordTimelineEvent("lean", { score }, 60000);
+  if (score >= getEffectiveLeanThreshold()) {
+    recordTimelineEvent("lean", { score, threshold: getEffectiveLeanThreshold() }, 60000);
   }
 
   const closeLimit = distanceWarning.value === "strict" ? 0.12 : 0.2;
@@ -779,7 +823,7 @@ function recordPostureStats(score, present) {
     return;
   }
 
-  if (score >= getLeanThreshold()) {
+  if (score >= getEffectiveLeanThreshold()) {
     dailyStats.leaningMs += delta;
   } else {
     dailyStats.uprightMs += delta;
@@ -811,6 +855,8 @@ function saveState() {
     quietHoursEnabled: quietHoursEnabled.value,
     quietStart: quietStart.value,
     quietEnd: quietEnd.value,
+    adaptiveSensitivity: adaptiveSensitivity.value,
+    adaptiveProfile,
     distanceWarning: distanceWarning.value,
     habitTracking: habitTracking.value,
     expressionTracking: expressionTracking.value,
@@ -830,6 +876,7 @@ function showSavedCalibration(savedAt) {
   calibrationBar.style.width = "100%";
   calibrationCard.className = "calibration-card done";
   updateFramingGuide(null);
+  updateAdaptiveReadout();
   calibrationHelp.textContent = savedAt
     ? `Saved calibration loaded from ${new Date(savedAt).toLocaleString()}. Recalibrate if your camera or chair moved.`
     : "Saved calibration loaded. Recalibrate if your camera or chair moved.";
@@ -866,6 +913,17 @@ function loadState() {
     if (payload?.quietHoursEnabled) quietHoursEnabled.value = payload.quietHoursEnabled;
     if (payload?.quietStart) quietStart.value = payload.quietStart;
     if (payload?.quietEnd) quietEnd.value = payload.quietEnd;
+    if (payload?.adaptiveSensitivity) adaptiveSensitivity.value = payload.adaptiveSensitivity;
+    if (payload?.adaptiveProfile && typeof payload.adaptiveProfile === "object") {
+      adaptiveProfile = {
+        ...adaptiveProfile,
+        ...payload.adaptiveProfile,
+        samples: Number(payload.adaptiveProfile.samples) || 0,
+        mean: Number(payload.adaptiveProfile.mean) || 0,
+        variance: Number(payload.adaptiveProfile.variance) || 0,
+        buffer: Number(payload.adaptiveProfile.buffer) || 0
+      };
+    }
     if (payload?.distanceWarning) distanceWarning.value = payload.distanceWarning;
     if (payload?.habitTracking) habitTracking.value = payload.habitTracking;
     if (payload?.expressionTracking) expressionTracking.value = payload.expressionTracking;
@@ -906,6 +964,8 @@ function clearSavedCalibration() {
     ? "Collecting seated posture frames. Keep your head and shoulders in view."
     : "Start the camera, sit upright, and keep your head and shoulders visible.";
   updateFramingGuide(null);
+  adaptiveProfile = { samples: 0, mean: 0, variance: 0, buffer: 0, updatedAt: null };
+  updateAdaptiveReadout();
   setStatus("Saved calibration cleared. Calibrate again while seated upright.", "neutral");
 }
 
@@ -1156,9 +1216,10 @@ function updateDistanceCue(metrics) {
 
 function updateScore(score) {
   const rounded = Math.round(score);
+  const threshold = getEffectiveLeanThreshold();
   scoreText.textContent = `${rounded}%`;
   scoreBar.style.width = `${rounded}%`;
-  scoreBar.style.backgroundColor = score >= getLeanThreshold() ? "#b91c1c" : score > 35 ? "#b45309" : "#0f766e";
+  scoreBar.style.backgroundColor = score >= threshold ? "#b91c1c" : score > threshold * 0.7 ? "#b45309" : "#0f766e";
 }
 
 function updateCalibrationReadiness() {
@@ -1284,6 +1345,40 @@ function updateHabitSignals(metrics) {
   }
 }
 
+function updateAdaptiveSensitivity(score) {
+  if (!adaptiveSensitivityEnabled() || !calibrated || cameraSleeping || paused) {
+    updateAdaptiveReadout();
+    return;
+  }
+
+  const baseThreshold = getLeanThreshold();
+  if (score >= baseThreshold + 12) {
+    updateAdaptiveReadout();
+    return;
+  }
+
+  const sample = Math.max(0, Math.min(100, score));
+  adaptiveProfile.samples = Math.min((adaptiveProfile.samples || 0) + 1, 5000);
+
+  const alpha = adaptiveProfile.samples < 120 ? 0.08 : 0.025;
+  const previousMean = adaptiveProfile.mean || sample;
+  const mean = previousMean + alpha * (sample - previousMean);
+  const variance = Math.max(
+    0,
+    (adaptiveProfile.variance || 0) + alpha * ((sample - previousMean) * (sample - mean) - (adaptiveProfile.variance || 0))
+  );
+  const learnedNormalLimit = mean + Math.sqrt(variance) * 2.2;
+  const targetBuffer = Math.max(0, learnedNormalLimit - baseThreshold + 6);
+
+  adaptiveProfile.mean = mean;
+  adaptiveProfile.variance = variance;
+  adaptiveProfile.buffer = Math.max(0, Math.min(18, targetBuffer));
+  adaptiveProfile.updatedAt = new Date().toISOString();
+
+  if (adaptiveProfile.samples % 30 === 0) saveState();
+  updateAdaptiveReadout();
+}
+
 function handlePosture(score) {
   if (!calibrated) {
     if (samples.length >= MIN_CALIBRATION_SAMPLES) {
@@ -1294,7 +1389,7 @@ function handlePosture(score) {
     return;
   }
 
-  const threshold = getLeanThreshold();
+  const threshold = getEffectiveLeanThreshold();
   const now = performance.now();
 
   if (score >= threshold) {
@@ -1474,7 +1569,7 @@ async function wakeForPeriodicCheck() {
 function maybeRestCamera(score) {
   if (!calibrated || cameraMode.value !== "periodic" || cameraSleeping) return;
 
-  const threshold = getLeanThreshold();
+  const threshold = getEffectiveLeanThreshold();
   const checkedLongEnough = performance.now() - activeCheckStartedAt >= PERIODIC_CHECK_DURATION_MS;
   if (checkedLongEnough && score < threshold) {
     schedulePeriodicRest();
@@ -1659,6 +1754,7 @@ function loop() {
         if (samples.length > 90) samples.shift();
         updateCalibrationReadiness();
         const score = scorePosture(metrics);
+        updateAdaptiveSensitivity(score);
         recordPostureStats(score, true);
         updateScore(score);
         updateDistanceCue(metrics);
@@ -1719,6 +1815,8 @@ function calibrate() {
   calibrationCard.className = "calibration-card done";
   calibrationHelp.textContent = "Calibrated. Press Recalibrate upright any time your sitting position or camera angle changes.";
   updateFramingGuide(null);
+  adaptiveProfile = { samples: 0, mean: 0, variance: 0, buffer: 0, updatedAt: null };
+  updateAdaptiveReadout();
   saveState();
   setStatus("Calibration saved. Monitoring forward lean.", "good");
 }
@@ -2126,6 +2224,16 @@ cameraSelect.addEventListener("change", async () => {
   }
 });
 checkInterval.addEventListener("change", saveState);
+adaptiveSensitivity.addEventListener("change", () => {
+  updateAdaptiveReadout();
+  saveState();
+  setStatus(
+    adaptiveSensitivityEnabled()
+      ? "Adaptive sensitivity enabled. The app will learn your normal seated movement."
+      : "Adaptive sensitivity disabled. Alerts use the fixed threshold only.",
+    "neutral"
+  );
+});
 installStartupBtn.addEventListener("click", () => setStartupInstalled(true));
 removeStartupBtn.addEventListener("click", () => setStartupInstalled(false));
 diagnosticsBtn.addEventListener("click", exportDiagnostics);
@@ -2188,6 +2296,7 @@ async function initializeApp() {
   updatePauseButton();
   updateMuteButton();
   updateCompactButton();
+  updateAdaptiveReadout();
   await updatePlatformInfo();
   updateStartupStatus();
   updateVersion();
