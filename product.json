@@ -14,6 +14,9 @@
     "optional habit tracking",
     "optional expression signals",
     "first-run user installer",
+    "versioned Windows release package",
+    "Windows Apps uninstall entry",
+    "bundled app icon",
     "Desktop and Start Menu shortcuts",
     "tray helper",
     "Windows startup integration"

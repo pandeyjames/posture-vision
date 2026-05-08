@@ -7,6 +7,7 @@ $ErrorActionPreference = "Stop"
 $AppDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Url = "http://127.0.0.1:8765"
 $LogPath = Join-Path $AppDir "data\tray-helper.log"
+$IconPath = Join-Path $AppDir "assets\posture-vision.ico"
 
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
@@ -286,7 +287,7 @@ try {
 
 $notifyIcon = New-Object System.Windows.Forms.NotifyIcon
 $notifyIcon.Text = "Posture Vision"
-$notifyIcon.Icon = [System.Drawing.SystemIcons]::Information
+$notifyIcon.Icon = if (Test-Path $IconPath) { New-Object System.Drawing.Icon $IconPath } else { [System.Drawing.SystemIcons]::Information }
 $notifyIcon.Visible = $true
 
 $menu = New-Object System.Windows.Forms.ContextMenuStrip

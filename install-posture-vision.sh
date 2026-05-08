@@ -3,6 +3,7 @@ set -euo pipefail
 
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_NAME="Posture Vision"
+APP_ICON="$APP_DIR/assets/posture-vision.svg"
 DESKTOP_FILE="$HOME/.local/share/applications/posture-vision.desktop"
 DESKTOP_SHORTCUT="$HOME/Desktop/posture-vision.desktop"
 AUTOSTART_FILE="$HOME/.config/autostart/posture-vision.desktop"
@@ -44,6 +45,7 @@ Name=$APP_NAME
 Comment=Local webcam posture monitor
 Exec=$APP_DIR/launch-posture-vision.sh
 Path=$APP_DIR
+Icon=$APP_ICON
 Terminal=false
 Categories=Utility;Health;
 EOF

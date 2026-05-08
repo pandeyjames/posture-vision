@@ -2,6 +2,7 @@
 set -euo pipefail
 
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+APP_ICON="$APP_DIR/assets/posture-vision.svg"
 AUTOSTART_DIR="$HOME/.config/autostart"
 AUTOSTART_FILE="$AUTOSTART_DIR/posture-vision.desktop"
 
@@ -13,6 +14,7 @@ Name=Posture Vision
 Comment=Start Posture Vision after login
 Exec=$APP_DIR/launch-posture-vision.sh --no-browser
 Path=$APP_DIR
+Icon=$APP_ICON
 Terminal=false
 X-GNOME-Autostart-enabled=true
 EOF

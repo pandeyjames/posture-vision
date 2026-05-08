@@ -1,5 +1,6 @@
 param(
-    [switch]$RemoveLocalData
+    [switch]$RemoveLocalData,
+    [switch]$NoPrompt
 )
 
 $ErrorActionPreference = "Stop"
@@ -10,6 +11,7 @@ $DesktopShortcut = Join-Path ([Environment]::GetFolderPath("Desktop")) "$AppName
 $ProgramsDir = Join-Path ([Environment]::GetFolderPath("Programs")) $AppName
 $StartMenuShortcut = Join-Path $ProgramsDir "$AppName.lnk"
 $DataDir = Join-Path $AppDir "data"
+$UninstallKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\PostureVision"
 
 foreach ($path in @($DesktopShortcut, $StartMenuShortcut)) {
     if (Test-Path $path) {
@@ -26,9 +28,14 @@ if ((Test-Path $ProgramsDir) -and -not (Get-ChildItem -LiteralPath $ProgramsDir 
     Remove-Item -LiteralPath $ProgramsDir -Force
 }
 
+if (Test-Path $UninstallKey) {
+    Remove-Item -LiteralPath $UninstallKey -Recurse -Force
+    Write-Output "Removed Windows Apps uninstall entry."
+}
+
 if ($RemoveLocalData -and (Test-Path $DataDir)) {
     Remove-Item -LiteralPath $DataDir -Recurse -Force
     Write-Output "Removed local data: $DataDir"
 }
 
-Write-Output "$AppName shortcuts removed."
+Write-Output "$AppName shortcuts and Windows Apps entry removed."

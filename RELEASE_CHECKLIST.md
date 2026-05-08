@@ -17,6 +17,9 @@
 
 ## Engineering
 
+- [x] Add versioned Windows release zip.
+- [x] Add Windows Apps uninstall entry.
+- [x] Add bundled app icon for shortcuts and tray.
 - [ ] Package as a signed Windows installer.
 - [ ] Bundle MediaPipe assets locally or disclose CDN dependency.
 - [ ] Harden local server endpoints.

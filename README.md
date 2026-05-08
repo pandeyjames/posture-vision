@@ -47,6 +47,8 @@ cd D:\Research\LLLM\posture-vision
 .\install-posture-vision.ps1
 ```
 
+The Windows installer also registers Posture Vision under **Windows Settings > Apps > Installed apps**, uses the bundled app icon for shortcuts/tray, and records the installed version from `product.json`.
+
 Install it and also start the tray helper automatically after Windows login:
 
 ```powershell
