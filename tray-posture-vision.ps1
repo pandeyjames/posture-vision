@@ -8,6 +8,7 @@ $AppDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Url = "http://127.0.0.1:8765"
 $LogPath = Join-Path $AppDir "data\tray-helper.log"
 $IconPath = Join-Path $AppDir "assets\posture-vision.ico"
+$script:AppIcon = $null
 
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
@@ -63,6 +64,25 @@ function Write-TrayLog {
     }
 }
 
+function Get-PostureIcon {
+    if ($script:AppIcon) {
+        return $script:AppIcon
+    }
+
+    try {
+        if (Test-Path $IconPath) {
+            $script:AppIcon = New-Object System.Drawing.Icon $IconPath
+        } else {
+            $script:AppIcon = [System.Drawing.SystemIcons]::Information
+        }
+    } catch {
+        Write-TrayLog "Could not load tray icon: $($_.Exception.Message)"
+        $script:AppIcon = [System.Drawing.SystemIcons]::Information
+    }
+
+    return $script:AppIcon
+}
+
 function Invoke-PauseToggle {
     try {
         Invoke-PostureServerOnly
@@ -109,6 +129,7 @@ function Show-PosturePopup {
         $form.Text = "Posture Vision"
         $form.ClientSize = New-Object System.Drawing.Size(420, 180)
         $form.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedSingle
+        $form.Icon = Get-PostureIcon
         $form.MaximizeBox = $false
         $form.MinimizeBox = $false
         $form.ShowInTaskbar = $false
@@ -287,7 +308,7 @@ try {
 
 $notifyIcon = New-Object System.Windows.Forms.NotifyIcon
 $notifyIcon.Text = "Posture Vision"
-$notifyIcon.Icon = if (Test-Path $IconPath) { New-Object System.Drawing.Icon $IconPath } else { [System.Drawing.SystemIcons]::Information }
+$notifyIcon.Icon = Get-PostureIcon
 $notifyIcon.Visible = $true
 
 $menu = New-Object System.Windows.Forms.ContextMenuStrip
@@ -356,6 +377,9 @@ try {
     $script:speaker.Dispose()
     $notifyIcon.Visible = $false
     $notifyIcon.Dispose()
+    if ($script:AppIcon -and $script:AppIcon -ne [System.Drawing.SystemIcons]::Information) {
+        $script:AppIcon.Dispose()
+    }
     $trayMutex.ReleaseMutex()
     $trayMutex.Dispose()
 }
