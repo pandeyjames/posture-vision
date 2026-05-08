@@ -185,27 +185,31 @@ h1 {
 
 .tabs {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 6px;
-  padding: 4px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  padding: 5px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: #eef3f1;
+  background: #f1f5f4;
 }
 
 button.tab-button {
-  min-height: 36px;
-  padding: 7px 8px;
+  min-height: 34px;
+  padding: 7px 10px;
   color: var(--muted);
   background: transparent;
   border-radius: 6px;
-  font-size: 13px;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: left;
+  white-space: nowrap;
 }
 
 button.tab-button:hover,
 button.tab-button.active {
   color: var(--ink);
   background: #fff;
+  box-shadow: 0 1px 2px rgba(24, 35, 33, 0.08);
 }
 
 .tab-panel {
@@ -701,5 +705,9 @@ body.compact .status-card {
 
   .tabs {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  button.tab-button {
+    text-align: center;
   }
 }
